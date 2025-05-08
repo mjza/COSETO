@@ -1,0 +1,6 @@
+selenium
+pyautogui
+pyinstaller
+keyboard
+psycopg2-binary
+python-dotenv
