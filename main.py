@@ -13,15 +13,18 @@ from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
 
 
+def to_bool(value):
+    return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+
 # Load environment variables
 load_dotenv()
 
 
 # how many projects to process per page
 DATABASE = os.getenv('ACTIVE_DB')  
-PAGE_SIZE = os.getenv('PAGE_SIZE')  
-DRIVER_PATH = os.getenv('DRIVER_PATH')
-
+PAGE_SIZE = os.getenv('PAGE_SIZE')
+DEBUG_MODE = to_bool(os.getenv('DEBUG_MODE'))
 
 # returns a db connection
 def get_db_connection(DBMS):
@@ -143,12 +146,17 @@ def process_repository(driver, repo_url, attributes):
 
 
 
-def create_driver():
+def create_driver(debug):
 	options = ChromeOptions()
-	options .add_experimental_option("detach", True)
-	options.headless = True
-	options.add_experimental_option("excludeSwitches", ["enable-logging"])
-	time.sleep(1)
+
+	if debug == False:
+		options.add_argument('--headless')  # Run in background
+		options.add_argument('--disable-gpu')  # Optional for headless stability
+	else: 
+		options.add_experimental_option("detach", True)
+		options.headless = True
+		options.add_experimental_option("excludeSwitches", ["enable-logging"])
+
 	driver = Chrome(options=options)
 	return driver
 
@@ -158,7 +166,7 @@ def main():
     cursor = conn.cursor()
     attributes = get_quality_attributes(cursor)
 
-    driver = create_driver()
+    driver = create_driver(DEBUG_MODE)
 
     offset = 0
     while True:
