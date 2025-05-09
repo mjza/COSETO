@@ -4,6 +4,7 @@ import os
 import sqlite3
 import psycopg2
 import time
+from sys import platform
 from selenium.webdriver import ChromeOptions, Chrome
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -20,6 +21,7 @@ load_dotenv()
 DATABASE = os.getenv('ACTIVE_DB')  
 PAGE_SIZE = os.getenv('PAGE_SIZE')  
 DRIVER_PATH = os.getenv('DRIVER_PATH')
+
 
 # returns a db connection
 def get_db_connection(DBMS):
@@ -68,7 +70,7 @@ def search_github_issues(driver, issues_url, query):
         
         # Optionally check the result count from the metadata if it has any issue
         try:
-            count_element = WebDriverWait(driver, 10).until(
+            count_element = WebDriverWait(driver, 1).until(
                 EC.presence_of_element_located((By.XPATH, "//*[@id=':rb:-list-view-metadata']/div[1]/ul/li[1]/a/span[1]"))
             )
             if count_element and count_element.text.strip().isdigit():
@@ -78,10 +80,14 @@ def search_github_issues(driver, issues_url, query):
             pass  # If the element doesn't exist, fallback to checking link list
         
         search_input = driver.find_element(by=By.XPATH, value="//*[@id='repository-input']")
-        search_input.clear()
+        if platform == "darwin":
+            search_input.send_keys(Keys.COMMAND, "a")
+        else:
+            search_input.send_keys(Keys.CONTROL, "a")
+        search_input.send_keys(Keys.BACKSPACE)
         search_input.send_keys(query)
         search_input.send_keys(Keys.ENTER)
-        time.sleep(3)
+        time.sleep(2)
         return driver.find_elements(By.CSS_SELECTOR, "a.IssuePullRequestTitle-module__ListItemTitle_1--_xOfg")
     except Exception as e:
         print(f"⚠️  Error searching '{query}' on {issues_url}: {e}")
@@ -93,7 +99,7 @@ def process_repository(driver, repo_url, attributes):
     original_window = driver.current_window_handle
 
     for attr in attributes:
-        q_main = f'is:issue state:open sort:created-desc {attr["criteria"]}'
+        q_main = f'is:issue sort:created-desc {attr["criteria"]}'
         results = search_github_issues(driver, issues_url, q_main)
         
         # When there is no issue, don't try other attributes
@@ -102,7 +108,7 @@ def process_repository(driver, repo_url, attributes):
 
         if not results and attr["synonyms"]:
             for syn in attr["synonyms"]:
-                q_syn = f'is:issue state:open sort:created-desc {syn}'
+                q_syn = f'is:issue sort:created-desc {syn}'
                 results = search_github_issues(driver, issues_url, q_syn)
                 if results:
                     break
@@ -121,13 +127,13 @@ def process_repository(driver, repo_url, attributes):
                 # Switch to new tab
                 new_window = [w for w in driver.window_handles if w != original_window][0]
                 driver.switch_to.window(new_window)
-                time.sleep(3)
+                time.sleep(5)
 
                 try:
                     issue_div = driver.find_element(By.CSS_SELECTOR, 'div[data-testid="issue-viewer-container"]')
                     print(f"\n🌐 {href}")
                     print(issue_div.text.strip())
-                    time.sleep(30)
+                    time.sleep(5)
                 except Exception as e:
                     print(f"❌ Could not read body for {href}: {e}")
 
