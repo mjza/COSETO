@@ -161,7 +161,7 @@ def process_repository(driver, repo_url, attributes):
                         f"-1 means the entire provided text speaks negatively about the project in relation to '{attr}', "
                         f"and +1 means the project is described as having the best features related to '{attr}'."
                     )
-                    response = query_llm(issue_text, command)
+                    response = query_llm(issue_text, command, model="deepseek-reasoner")
                     print(response)
                     time.sleep(30)
                 except Exception as e:
