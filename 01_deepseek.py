@@ -11,6 +11,7 @@ import re
 import tiktoken
 import os
 import sys
+import requests
 import logging
 from datetime import datetime, time, timedelta, timezone
 import time as time_module
@@ -120,30 +121,60 @@ def truncate_issue_text(issue_text, command, max_total_tokens=60000):
     return f"{command.strip()}\n\n---\n{safe_issue_text.strip()}\n---"
 
 
-def query_llm(issue_text, command, provider="deepseek", model="deepseek-chat"):
-    prompt = truncate_issue_text(issue_text, command)
+def query_llm(issue_text, command, provider="local", model="deepseek-r1-distill-qwen-7b"):
+    truncate = to_bool(os.getenv('TRUNCATE'))
+    # Optional truncation
+    if truncate:
+        prompt = truncate_issue_text(issue_text, command)
+    else:
+        prompt = f"{command.strip()}\n\n---\n{issue_text.strip()}\n---"
+    
+    messages = [
+        {"role": "system", "content": "You are a software engineering assistant. Analyze GitHub issues."},
+        {"role": "user", "content": prompt}
+    ]
 
-    if provider == "openai":
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    if provider == "local":
+        url = "http://localhost:1234/v1/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.2
+        }
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
+            response.raise_for_status()
+            return response.json()['choices'][0]['message']['content'].strip()
+        except Exception as e:
+            print(f"❌ Local LLM call failed: {e}")
+            return ""
+
     elif provider == "deepseek":
+        from openai import OpenAI
         client = OpenAI(
             api_key=os.getenv("DEEPSEEK_API_KEY"),
             base_url=os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1")
         )
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.2
+        )
+        return response.choices[0].message.content.strip()
+
+    elif provider == "openai":
+        from openai import OpenAI
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.2
+        )
+        return response.choices[0].message.content.strip()
+
     else:
         raise ValueError("Unsupported provider")
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": "You are a software engineering assistant. Analyze GitHub issues."},
-            {"role": "user", "content": prompt}
-        ],
-        stream=False,
-        temperature=0.2
-    )
-
-    return response.choices[0].message.content.strip()
 
 
 # returns a db connection
@@ -191,6 +222,9 @@ def get_projects(cursor, offset, limit):
 def process_project(conn, cursor, project_id, attributes):
     placeholder = '?' if cursor.connection.__class__.__module__.startswith('sqlite3') else '%s'
 
+    provider = os.getenv('AI_PROVIDER')
+    model = os.getenv('AI_MODEL')
+    
     for attr in attributes:
         criterion = attr["criterion"]
         
@@ -233,7 +267,7 @@ def process_project(conn, cursor, project_id, attributes):
                     f"and +1 means the project is described as having the best features related to '{criterion}'."
                 )
                 
-                response = query_llm(issue_text, command, model="deepseek-reasoner")
+                response = query_llm(issue_text, command, provider, model)
                 print(f"Result: {response}")
                 store_issue_result(conn, cursor, project_id, criterion, response, issue_number)
 
