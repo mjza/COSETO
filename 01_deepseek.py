@@ -12,7 +12,9 @@ import tiktoken
 import os
 import sys
 import logging
-from datetime import datetime
+from datetime import datetime, time, timedelta, timezone
+import time as time_module
+
 
 # Load environment variables
 load_dotenv()
@@ -243,34 +245,54 @@ def to_bool(value):
 def main():
     # make a log file to capture all prints
     setup_logger()
+    
+    use_discount = not to_bool(os.getenv('DEBUG_MODE'))
+    
+    # Step 1: wait until 16:30 UTC
+    now_utc = datetime.now(timezone.utc)
+    start_time = now_utc.replace(hour=16, minute=30, second=0, microsecond=0)
+
+    if use_discount and now_utc < start_time:
+        wait_seconds = (start_time - now_utc).total_seconds()
+        print(f"⏳ Waiting until 16:30 UTC ({int(wait_seconds)} seconds)...")
+        time_module.sleep(wait_seconds)
 
     # Extract env values
-    #debug_mode = to_bool(os.getenv('DEBUG_MODE'))
     database = os.getenv('ACTIVE_DB')
-    page_size = os.getenv('PAGE_SIZE')
-    
+    page_size = int(os.getenv('PAGE_SIZE', 10))  # ensure it's an int
+
     # connect to DB
     conn = get_db_connection(database)
     conn.autocommit = True
     cursor = conn.cursor()
-    
+
     print("Collect attributes")
-    
-    # retrieve attributes
-    attributes = get_quality_attributes(cursor)
-        
+    attributes = get_quality_attributes(cursor)    
+
+    # Step 2: process projects within allowed UTC window
     offset = 0
     while True:
         projects = get_projects(cursor, offset, page_size)
         if not projects:
             break
+
         for project_id in projects:
+            now_utc = datetime.now(timezone.utc)
+
+            if use_discount and now_utc.time() >= time(0, 0):
+                print("⏹️ Reached 00:00 UTC — stopping further processing.")
+                cursor.close()
+                conn.close()
+                return
+
+            print(f"🕒 Processing project {project_id} at {now_utc.time().strftime('%H:%M:%S')} UTC")
             process_project(conn, cursor, project_id, attributes)
+
         offset += page_size
 
     cursor.close()
     conn.close()
-
+    
 
 if __name__ == '__main__':
     main()
