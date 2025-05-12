@@ -321,7 +321,7 @@ def main():
         for project_id in projects:
             now_utc = datetime.now(timezone.utc)
 
-            if use_discount and now_utc.time() > cutoff:
+            if use_discount and now_utc > cutoff:
                 print("⏹️ Reached 00:00 UTC — stopping further processing.")
                 cursor.close()
                 conn.close()
