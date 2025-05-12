@@ -171,3 +171,36 @@ pyinstaller --onefile COSETO.py
 2. Rename it to `env.lcl`
 3. Update values inside of it
 4. Save and run the `COSETO.exe` again.
+
+
+# Specifications
+
+We have to cut the command to 65k token before sending to DeepSeek.
+
+## 🔍 What is a "token"?
+
+A token is **not always a word**.
+
+### ✅ Examples of how tokens are formed:
+
+| Text                | Tokens                                      | Token Count |
+| ------------------- | ------------------------------------------- | ----------- |
+| `ChatGPT is great!` | `["Chat", "G", "PT", " is", " great", "!"]` | 6           |
+| `1234567890`        | `["123456", "7890"]`                        | 2           |
+| `deepseek-reasoner` | `["deep", "seek", "-", "reason", "er"]`     | 5           |
+
+A token is roughly **4 characters in English on average**, but:
+
+* Common words and punctuation are often 1 token
+* Long or rare words can break into 2–4 tokens
+* **Non-English, emoji, code, and whitespace** can impact tokenization a lot
+
+---
+
+## ✅ TL;DR
+
+* `len(enc.encode(text))` gives the exact **token count**
+* **Tokens ≠ words**
+* Always count tokens before sending to a model with a token limit (like 65k for DeepSeek)
+
+---
