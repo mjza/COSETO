@@ -15,10 +15,27 @@ import requests
 import logging
 from datetime import datetime, time, timedelta, timezone
 import time as time_module
+import lmstudio as lms
 
 
 # Load environment variables
 load_dotenv()
+
+
+def query_llm_local_stream(prompt):
+
+    llm = lms.llm()  # Automatically connects to LM Studio
+    print("🧠 [LM Studio] Streaming response...\n")
+
+    # Stream response token-by-token
+    streamed_result = ""
+    for token in llm.respond_stream(prompt):
+        # print(token.content, end="", flush=True)
+        streamed_result += token.content
+
+    print("\n✅ [Complete]")
+    return streamed_result.strip()
+
 
 def setup_logger(log_folder="./logs", prefix="run"):
     # Ensure log directory exists
@@ -125,7 +142,10 @@ def query_llm(issue_text, command, provider="local", model="deepseek-r1-distill-
     truncate = to_bool(os.getenv('TRUNCATE'))
     # Optional truncation
     if truncate:
-        prompt = truncate_issue_text(issue_text, command)
+        if provider == "local":
+            prompt = truncate_issue_text(issue_text, command, max_total_tokens=3000)
+        else:
+            prompt = truncate_issue_text(issue_text, command)
     else:
         prompt = f"{command.strip()}\n\n---\n{issue_text.strip()}\n---"
     
@@ -135,21 +155,7 @@ def query_llm(issue_text, command, provider="local", model="deepseek-r1-distill-
     ]
 
     if provider == "local":
-        url = "http://localhost:1234/v1/chat/completions"
-        headers = {"Content-Type": "application/json"}
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": 0.2
-        }
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=120)
-            response.raise_for_status()
-            return response.json()['choices'][0]['message']['content'].strip()
-        except Exception as e:
-            print(f"❌ Local LLM call failed: {e}")
-            return ""
-
+        return query_llm_local_stream(prompt)
     elif provider == "deepseek":
         from openai import OpenAI
         client = OpenAI(
@@ -285,6 +291,8 @@ def main():
     # Step 1: wait until 16:30 UTC
     now_utc = datetime.now(timezone.utc)
     start_time = now_utc.replace(hour=16, minute=30, second=0, microsecond=0)
+    # Define cutoff datetime: tomorrow at 00:30 UTC
+    cutoff = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
 
     if use_discount and now_utc < start_time:
         wait_seconds = (start_time - now_utc).total_seconds()
@@ -313,7 +321,7 @@ def main():
         for project_id in projects:
             now_utc = datetime.now(timezone.utc)
 
-            if use_discount and now_utc.time() >= time(0, 0):
+            if use_discount and now_utc.time() > cutoff:
                 print("⏹️ Reached 00:00 UTC — stopping further processing.")
                 cursor.close()
                 conn.close()
