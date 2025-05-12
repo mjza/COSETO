@@ -8,11 +8,55 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import json
 import re
-import psycopg2.extras
-
+import tiktoken
+import os
+import sys
+import logging
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
+
+def setup_logger(log_folder="./logs", prefix="run"):
+    # Ensure log directory exists
+    os.makedirs(log_folder, exist_ok=True)
+
+    # Create timestamped log filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = os.path.join(log_folder, f"{prefix}_{timestamp}.log")
+
+    # Set up root logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # File handler
+    file_handler = logging.FileHandler(log_filename, mode='a', encoding='utf-8')
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter('%(message)s'))
+
+    # Avoid adding handlers multiple times
+    if not logger.handlers:
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
+
+    # Redirect print() to logger
+    class LoggerWriter:
+        def write(self, message):
+            message = message.strip()
+            if message:
+                logger.info(message)
+
+        def flush(self):
+            pass
+
+    sys.stdout = LoggerWriter()
+    sys.stderr = LoggerWriter()
+
+    print(f"📁 Logging to: {log_filename}")
+    return log_filename
 
 
 def store_issue_result(conn, cursor, project_id, criterion, response_string, issue_number):
@@ -57,9 +101,25 @@ def store_issue_result(conn, cursor, project_id, criterion, response_string, iss
         ))
         
     conn.commit()
+    
+    
+def truncate_issue_text(issue_text, command, max_total_tokens=60000):
+    enc = tiktoken.get_encoding("cl100k_base")  # Best match for DeepSeek
+
+    command_tokens = enc.encode(command)
+    available_tokens = max_total_tokens - len(command_tokens)
+
+    issue_tokens = enc.encode(issue_text)
+    if len(issue_tokens) > available_tokens:
+        print(f"⚠️ Truncating issue_text from {len(issue_tokens)} to {available_tokens} tokens.")
+        issue_tokens = issue_tokens[:available_tokens]
+
+    safe_issue_text = enc.decode(issue_tokens)
+    return f"{command.strip()}\n\n---\n{safe_issue_text.strip()}\n---"
+
 
 def query_llm(issue_text, command, provider="deepseek", model="deepseek-chat"):
-    prompt = f"{command.strip()}\n\n---\n{issue_text.strip()}\n---"
+    prompt = truncate_issue_text(issue_text, command)
 
     if provider == "openai":
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -181,6 +241,9 @@ def to_bool(value):
 
 
 def main():
+    # make a log file to capture all prints
+    setup_logger()
+
     # Extract env values
     #debug_mode = to_bool(os.getenv('DEBUG_MODE'))
     database = os.getenv('ACTIVE_DB')
