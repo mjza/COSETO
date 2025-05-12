@@ -162,7 +162,7 @@ def get_db_connection(DBMS):
 
 
 def get_quality_attributes(cursor):
-    cursor.execute("SELECT attribute, definition, related_words FROM quality_attributes_v2 ORDER BY \"order\" ASC LIMIT 10")
+    cursor.execute("SELECT attribute, definition, related_words FROM quality_attributes_v2 ORDER BY turn ASC LIMIT 10")
     attributes = []
     for row in cursor.fetchall():
         criterion = row[0].strip()
