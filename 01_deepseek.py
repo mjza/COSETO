@@ -272,9 +272,16 @@ def process_project(conn, cursor, project_id, attributes):
                     f"-1 means the entire provided issue text speaks negatively about the project in relation to '{criterion}', "
                     f"and +1 means the project is described as having the best features related to '{criterion}'."
                 )
-                
-                response = query_llm(issue_text, command, provider, model)
-                print(f"Result: {response}")
+                try:
+                    response = query_llm(issue_text, command, provider, model)
+                    print(f"Result: {response}")
+                except Exception as e:
+                    print(f"❌ Error while querying LLM: {e}")
+                    response = json.dumps({
+                        "reason": None,
+                        "score": 0.0
+                    })
+
                 store_issue_result(conn, cursor, project_id, criterion, response, issue_number)
 
 
