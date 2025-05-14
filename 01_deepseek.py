@@ -1,5 +1,3 @@
-
-
 import os
 import sqlite3
 import psycopg2
@@ -315,7 +313,7 @@ def main():
     conn.autocommit = True
     cursor = conn.cursor()
 
-    print("Collect attributes")
+    print("✅ Collect attributes")
     attributes = get_quality_attributes(cursor)    
 
     # Step 2: process projects within allowed UTC window
