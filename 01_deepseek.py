@@ -121,7 +121,7 @@ def store_issue_result(conn, cursor, project_id, criterion, response_string, iss
     conn.commit()
     
     
-def truncate_issue_text(issue_text, command, max_total_tokens=60000):
+def truncate_issue_text(issue_text, command, max_total_tokens=55000):
     enc = tiktoken.get_encoding("cl100k_base")  # Best match for DeepSeek
 
     command_tokens = enc.encode(command)
