@@ -317,7 +317,7 @@ def main():
     attributes = get_quality_attributes(cursor)    
 
     # Step 2: process projects within allowed UTC window
-    offset = 0
+    offset = int(os.getenv('PROJECTS_OFFSET', '0'))
     while True:
         projects = get_projects(cursor, offset, page_size)
         if not projects:
